@@ -57,3 +57,20 @@ def get_recent_events(limit=50):
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+def get_total_rejected():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS c FROM events WHERE status='rejected'")
+    row = cur.fetchone()
+    conn.close()
+    return int(row["c"]) if row else 0
+
+def clear_events():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM events")
+    conn.commit()
+    conn.close()
+
