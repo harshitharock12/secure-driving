@@ -28,6 +28,34 @@ def receive():
         print(f"[Logger] REJECTED: {reason}")
         return jsonify({"status": "rejected", "reason": reason}), 403
 
+@app.route("/events")
+def events():
+    events = get_recent_events(50)
+
+    def format_row(e):
+        row_class = "valid-row" if e["status"] == "valid" else "rejected-row"
+        badge = "✓ VALID" if e["status"] == "valid" else "✗ REJECTED"
+        badge_class = "badge-valid" if e["status"] == "valid" else "badge-rejected"
+        time_str = datetime.fromtimestamp(e["received_at"]).strftime("%H:%M:%S")
+        reason = e["reject_reason"] or "—"
+        reason_html = f"<span class='reason'>{reason}</span>" if e["reject_reason"] else "—"
+
+        return f"""
+        <tr class="{row_class}">
+            <td>{time_str}</td>
+            <td>{e['event_type']}</td>
+            <td><span class="badge {badge_class}">{badge}</span></td>
+            <td>{reason_html}</td>
+        </tr>"""
+
+    rows_html = "".join(format_row(e) for e in events)
+    reject_count = sum(1 for e in events if e["status"] == "rejected")
+
+    return jsonify({
+        "reject_count": reject_count,
+        "rows_html": rows_html
+    })
+
 
 @app.route("/")
 def dashboard():
@@ -53,7 +81,10 @@ def dashboard():
     reject_count  = sum(1 for e in events if e["status"] == "rejected")
 
     return f"""
-    <!DOCTYPE html><html><head><title>SecureSense Dashboard</title>
+    <!DOCTYPE html><html><head><title>Drive Secure Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         @keyframes carZoom {{ 
@@ -68,15 +99,16 @@ def dashboard():
             90% {{ opacity: 1; }}
             100% {{ transform: translateX(-100px) scaleX(-1); opacity: 0; }}
         }}
-        body {{ 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            color: #e0e0e0;
+        body {{
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0B3C5D 0%, #005DAA 55%, #4BB7E6 100%);
+            color: #FFFFFF;
             min-height: 100vh;
             padding: 20px;
             overflow-x: hidden;
             position: relative;
         }}
+
         .car-lane {{
             position: fixed;
             width: 100%;
@@ -105,54 +137,87 @@ def dashboard():
             text-align: center;
             margin-bottom: 40px;
             padding: 30px 20px;
-            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2) 0%, rgba(15, 52, 96, 0.3) 100%);
+            background: rgba(255, 255, 255, 0.12);
             border-radius: 15px;
-            border-left: 5px solid #e94560;
-            box-shadow: 0 8px 32px rgba(233, 69, 96, 0.1);
+            border-left: 6px solid #FFFFFF;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
         }}
-        .header h1 {{ 
-            font-size: 2.5em; 
-            color: #00d4ff;
-            text-shadow: 0 2px 10px rgba(0, 212, 255, 0.3);
-            letter-spacing: 1px;
+        .header h1 {{
+            font-size: 2.6em;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #FFFFFF;
         }}
-        .header p {{ color: #b0b0b0; margin-top: 10px; font-size: 0.95em; }}
+        .header p {{
+            font-weight: 500;
+            color: #E6EEF5;
+            margin-top: 10px;
+            font-size: 1em;
+        }}
         .stats {{ 
             display: flex; 
-            gap: 20px; 
+            gap: 20px;
+            justify-content: center;
             margin-bottom: 40px;
             flex-wrap: wrap;
         }}
-        .stat-box {{ 
-            flex: 1;
-            min-width: 200px;
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(233, 69, 96, 0.05) 100%);
-            padding: 25px;
-            border-radius: 12px;
-            border: 2px solid rgba(0, 212, 255, 0.3);
-            text-align: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        .stat-box {{
+            margin: 20px auto 32px auto;
+            width: min(520px, 100%);
+            background: #FFFFFF;
+            padding: 28px;
+            border-radius: 16px;
+            border: none;
+            text-align: center;   /* <-- change this */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            position: relative;
+            overflow: hidden;
         }}
+        .stat-box::before {{
+            content: "";
+            position: absolute;
+            inset: -2px;
+            background: radial-gradient(circle at 20% 20%, rgba(0, 212, 255, 0.22), transparent 55%),
+                        radial-gradient(circle at 80% 40%, rgba(233, 69, 96, 0.18), transparent 55%);
+            opacity: 0.9;
+            pointer-events: none;
+        }}
+
         .stat-box:hover {{
-            transform: translateY(-5px);
-            border-color: rgba(0, 212, 255, 0.6);
-            box-shadow: 0 6px 25px rgba(0, 212, 255, 0.2);
+            transform: translateY(-4px);
+            border-color: rgba(0, 212, 255, 0.45);
+            box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
         }}
-        .stat-box h3 {{ 
-            margin: 0 0 12px;
-            color: #00d4ff;
+        .stat-box h3 {{
+            font-weight: 700;
             font-size: 0.9em;
+            letter-spacing: 0.8px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            color: #0B3C5D;
         }}
-        .stat-box h2 {{ 
-            font-size: 2.5em;
-            font-weight: bold;
+        .stat-box h2 {{
+            font-size: 3.4em;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin: 6px 0;
         }}
         .stat-valid h2 {{ color: #00ff88; }}
-        .stat-rejected h2 {{ color: #ff6b6b; }}
+        .stat-rejected h2 {{
+            font-size: 3.2em;
+            font-weight: 800;
+            color: #005DAA;
+            text-align: center;
+        }}
         .stat-total h2 {{ color: #00d4ff; }}
+        .stat-sub {{
+            margin-top: 6px;
+            font-size: 0.95em;
+            font-weight: 500;
+            color: #1f2d3d;
+        }}
+        .stats {{
+            margin-bottom: 50px;   /* adds breathing room before the table */
+        }}
         table {{ 
             width: 100%; 
             border-collapse: collapse;
@@ -161,23 +226,25 @@ def dashboard():
             overflow: hidden;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }}
-        th {{ 
-            background: linear-gradient(135deg, #e94560 0%, #c72c48 100%);
-            color: white; 
+        th {{
+            background: #005DAA;
+            color: #FFFFFF;
             padding: 16px 12px;
-            text-align: left;
             font-weight: 600;
-            letter-spacing: 0.5px;
+            font-size: 0.95em;
+            letter-spacing: 0.3px;
         }}
-        td {{ 
+        td {{
             padding: 14px 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            color: #d0d0d0;
+            font-size: 0.95em;
+            font-weight: 500;
+            color: #E6EEF5;
         }}
         tr:hover {{ background: rgba(0, 212, 255, 0.08); }}
         tr:last-child td {{ border-bottom: none; }}
         .valid-row {{ background: rgba(0, 255, 136, 0.08); }}
-        .rejected-row {{ background: rgba(255, 107, 107, 0.08); }}
+        .valid-row {{background: rgba(75, 183, 230, 0.10); }}
+        .rejected-row {{background: rgba(11, 60, 93, 0.20); }}
         .badge {{ 
             padding: 6px 12px;
             border-radius: 6px;
@@ -199,37 +266,58 @@ def dashboard():
             font-size: 0.9em;
         }}
     </style>
-    <meta http-equiv="refresh" content="3">
     </head><body>
     <div class="container">
         <div class="header">
-            <h1>🚗 SecureSense — Live Dashboard</h1>
+            <h1>Drive Secure — Live Dashboard</h1>
             <p>Authenticated Vehicle Sensor System | Real-time Verification</p>
         </div>
         <div class="stats">
-            <div class="stat-box stat-valid">
-                <h3>✓ Valid Events</h3>
-                <h2>{valid_count}</h2>
-            </div>
             <div class="stat-box stat-rejected">
-                <h3>✗ Rejected Events</h3>
-                <h2>{reject_count}</h2>
-            </div>
-            <div class="stat-box stat-total">
-                <h3>📊 Total Events</h3>
-                <h2>{len(events)}</h2>
+                <h3>Blocked / Fabricated Messages</h3>
+                <h2 id="rejectCount">{reject_count}</h2>
+                <div class="stat-sub">Total rejected signature checks (last 50 displayed below)</div>
             </div>
         </div>
+
         <table>
-            <tr>
-                <th>⏰ Time</th>
-                <th>📡 Event Type</th>
-                <th>🔐 Status</th>
-                <th>ℹ️ Rejection Reason</th>
-            </tr>
-            {rows_html}
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Event Type</th>
+                    <th>Status</th>
+                    <th>Rejection Reason</th>
+                </tr>
+            </thead>
+            <tbody id="eventsBody">
+                {rows_html}
+            </tbody>
         </table>
     </div>
+    <script>
+    async function refreshEvents() {{
+    try {{
+        const res = await fetch("/events", {{ cache: "no-store" }});
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update counter
+        const counter = document.getElementById("rejectCount");
+        if (counter) counter.textContent = data.reject_count;
+
+        // Update table rows
+        const body = document.getElementById("eventsBody");
+        if (body) body.innerHTML = data.rows_html;
+    }} catch (e) {{
+        // ignore transient errors
+    }}
+    }}
+
+    // Initial refresh + repeat
+    refreshEvents();
+    setInterval(refreshEvents, 3000);
+    </script>
+
     </body></html>"""
 
 
