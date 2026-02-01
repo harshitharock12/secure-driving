@@ -1,1 +1,24 @@
+# SecureSense — Authenticated Vehicle Sensor System
+# Hackathon Project Dependencies
+
+# Web Framework & API
+Flask==3.1.2
+
+# Networking & HTTP
+requests==2.32.5
+
+# Security & Cryptography
+cryptography==46.0.4
+
+# Computer Vision (Camera & Motion Detection)
+opencv-python==4.13.0.90
+
+# Numerical Computing
+numpy==2.4.1
+
+# Database
+# SQLite3 is built-in with Python, no need to install
+
+# Utilities
+click==8.3.1
 
