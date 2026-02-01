@@ -1,13 +1,26 @@
 from flask import Flask, request, jsonify
 from verifier import verify_message
-from storage import init_db, store_event, get_recent_events
+from storage import init_db, store_event, get_recent_events, get_total_rejected, clear_events
 from datetime import datetime
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import LOGGER_PORT
 
+EVENT_LABELS = {
+    "normal":             "Normal",
+    "distance_alert":     "Distance Alert",
+    "motion_detected":    "Motion Detected",
+    "collision_warning":  "Collision Warning",
+    "crash_detected":     "Crash Detected",
+    "lane_departure":     "Lane Departure",
+    "spoof_attempt":      "Sensor Spoofing Attempt",
+}
+
+
 app = Flask(__name__)
 init_db()   # Create table on startup
+
+clear_events()
 
 
 @app.route("/receive", methods=["POST"])
@@ -30,30 +43,56 @@ def receive():
 
 @app.route("/events")
 def events():
-    events = get_recent_events(50)
+    events = get_recent_events(50) or []
 
     def format_row(e):
-        row_class = "valid-row" if e["status"] == "valid" else "rejected-row"
-        badge = "✓ VALID" if e["status"] == "valid" else "✗ REJECTED"
-        badge_class = "badge-valid" if e["status"] == "valid" else "badge-rejected"
-        time_str = datetime.fromtimestamp(e["received_at"]).strftime("%H:%M:%S")
-        reason = e["reject_reason"] or "—"
-        reason_html = f"<span class='reason'>{reason}</span>" if e["reject_reason"] else "—"
+        status = e.get("status", "rejected")
+        row_class = "valid-row" if status == "valid" else "rejected-row"
+        badge = "✓ VALID" if status == "valid" else "✗ REJECTED"
+        badge_class = "badge-valid" if status == "valid" else "badge-rejected"
+
+        received_at = e.get("received_at", 0)
+        # If received_at is not a unix timestamp, this might throw -> caught below
+        time_str = datetime.fromtimestamp(received_at).strftime("%H:%M:%S")
+
+        reason = e.get("reject_reason") or "—"
+        reason_html = f"<span class='reason'>{reason}</span>" if e.get("reject_reason") else "—"
+        raw_type = e.get("event_type")
+        event_type = EVENT_LABELS.get(raw_type, raw_type.replace("_", " ").title() if raw_type else "—")
 
         return f"""
         <tr class="{row_class}">
             <td>{time_str}</td>
-            <td>{e['event_type']}</td>
+            <td>{event_type}</td>
             <td><span class="badge {badge_class}">{badge}</span></td>
             <td>{reason_html}</td>
         </tr>"""
 
-    rows_html = "".join(format_row(e) for e in events)
-    reject_count = sum(1 for e in events if e["status"] == "rejected")
+    reject_count = get_total_rejected()
+
+    rows = []
+    for e in events:
+        try:
+            rows.append(format_row(e))
+        except Exception as ex:
+            # Don't break the whole dashboard if one row is malformed
+            rows.append(f"""
+            <tr class="rejected-row">
+                <td>--</td>
+                <td>render_error</td>
+                <td><span class="badge badge-rejected">✗ ERROR</span></td>
+                <td><span class="reason">{str(ex)}</span></td>
+            </tr>""")
+
+    rows_html = "".join(rows)
+
+    # Optional: helps the "update only when changed" approach
+    last_id = events[0].get("id", 0) if events else 0
 
     return jsonify({
         "reject_count": reject_count,
-        "rows_html": rows_html
+        "rows_html": rows_html,
+        "last_id": last_id
     })
 
 
@@ -69,10 +108,11 @@ def dashboard():
         time_str = datetime.fromtimestamp(e["received_at"]).strftime("%H:%M:%S")
         reason = e["reject_reason"] or "—"
         reason_html = f"<span class='reason'>{reason}</span>" if e["reject_reason"] else "—"
+        event_type = EVENT_LABELS.get(e["event_type"], e["event_type"].replace("_", " ").title() if e["event_type"] else "—")
         rows_html += f"""
         <tr class="{row_class}">
             <td>{time_str}</td>
-            <td>{e['event_type']}</td>
+            <td>{event_type}</td>
             <td><span class="badge {badge_class}">{badge}</span></td>
             <td>{reason_html}</td>
         </tr>"""
@@ -158,17 +198,17 @@ def dashboard():
             display: flex; 
             gap: 20px;
             justify-content: center;
-            margin-bottom: 40px;
+            margin-bottom: 0px;
             flex-wrap: wrap;
         }}
         .stat-box {{
             margin: 20px auto 32px auto;
             width: min(520px, 100%);
             background: #FFFFFF;
-            padding: 28px;
+            padding: 15px;
             border-radius: 16px;
             border: none;
-            text-align: center;   /* <-- change this */
+            text-align: center;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             position: relative;
             overflow: hidden;
@@ -216,8 +256,48 @@ def dashboard():
             color: #1f2d3d;
         }}
         .stats {{
-            margin-bottom: 50px;   /* adds breathing room before the table */
+            display: flex;
+            justify-content: center;
+            margin-bottom: 0;
         }}
+        .panel {{
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.28);
+            backdrop-filter: blur(10px);
+
+            margin-bottom: 22px; 
+        }}
+        .panel table {{
+            margin-top: 18px;
+        }}
+
+        .topbar{{
+            display:flex; align-items:center; justify-content:space-between;
+            padding:14px 16px; margin-bottom:18px;
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }}
+        .brand{{ display:flex; gap:12px; align-items:center; }}
+        .dot{{
+            width:10px; height:10px; border-radius:999px;
+            background:#00ff88; box-shadow: 0 0 18px rgba(0,255,136,0.7);
+        }}
+        .brand-title{{ font-weight:800; letter-spacing:-0.3px; }}
+        .brand-sub{{ font-size:0.9em; color:#E6EEF5; opacity:0.9; }}
+        .meta{{ display:flex; gap:12px; align-items:center; }}
+        .pill{{
+            padding:6px 10px; border-radius:999px;
+            background: rgba(0,255,136,0.14);
+            border: 1px solid rgba(0,255,136,0.35);
+            font-weight:700; letter-spacing:0.6px;
+        }}
+        .meta-text{{ color:#E6EEF5; font-size:0.92em; }}
+
         table {{ 
             width: 100%; 
             border-collapse: collapse;
@@ -242,8 +322,11 @@ def dashboard():
         }}
         tr:hover {{ background: rgba(0, 212, 255, 0.08); }}
         tr:last-child td {{ border-bottom: none; }}
-        .valid-row {{ background: rgba(0, 255, 136, 0.08); }}
-        .valid-row {{background: rgba(75, 183, 230, 0.10); }}
+        .valid-row {{ background: rgba(0, 212, 255, 0.10); }}
+        td, th {{ border-bottom: 1px solid rgba(255,255,255,0.08); }}
+        thead th {{ position: sticky; top: 0; z-index: 2; }}
+        tbody tr {{ transition: background 160ms ease; }}
+
         .rejected-row {{background: rgba(11, 60, 93, 0.20); }}
         .badge {{ 
             padding: 6px 12px;
@@ -268,18 +351,37 @@ def dashboard():
     </style>
     </head><body>
     <div class="container">
+        <div class="topbar">
+            <div class="brand">
+                <div class="dot"></div>
+                <div>
+                <div class="brand-title">Drive Secure</div>
+                <div class="brand-sub">Authenticated Vehicle Sensor System</div>
+                </div>
+            </div>
+            <div class="meta">
+                <span class="pill" id="livePill">LIVE</span>
+                <span class="meta-text">Last update: <span id="lastUpdated">—</span></span>
+                
+            </div>
+        </div>
         <div class="header">
             <h1>Drive Secure — Live Dashboard</h1>
             <p>Authenticated Vehicle Sensor System | Real-time Verification</p>
+            <p style="margin-top:8px; font-size:0.9em; opacity:0.85;">
+                
+            </p>
         </div>
-        <div class="stats">
-            <div class="stat-box stat-rejected">
-                <h3>Blocked / Fabricated Messages</h3>
-                <h2 id="rejectCount">{reject_count}</h2>
-                <div class="stat-sub">Total rejected signature checks (last 50 displayed below)</div>
+        <div class="panel">
+            <div class="stats">
+                <div class="stat-box stat-rejected">
+                    <h3>Blocked / Fabricated Messages</h3>
+                    <h2 id="rejectCount">{reject_count}</h2>
+                    <div class="stat-sub">Total rejected signature checks (last 50 displayed below)</div>
+                </div>
             </div>
         </div>
-
+        
         <table>
             <thead>
                 <tr>
@@ -295,27 +397,50 @@ def dashboard():
         </table>
     </div>
     <script>
+    const LIVE_WINDOW_MS = 3000;
+    let lastEventTs = null;
+    let lastId = null;
+    let delayMs = 800;
+
     async function refreshEvents() {{
-    try {{
-        const res = await fetch("/events", {{ cache: "no-store" }});
-        if (!res.ok) return;
-        const data = await res.json();
+        try {{
+            const res = await fetch("/events", {{ cache: "no-store" }});
+            if (!res.ok) return;
+            const data = await res.json();
 
-        // Update counter
-        const counter = document.getElementById("rejectCount");
-        if (counter) counter.textContent = data.reject_count;
+            if (lastId !== data.last_id) {{
+                lastId = data.last_id;
 
-        // Update table rows
-        const body = document.getElementById("eventsBody");
-        if (body) body.innerHTML = data.rows_html;
-    }} catch (e) {{
-        // ignore transient errors
+                const counter = document.getElementById("rejectCount");
+                if (counter) counter.textContent = data.reject_count;
+
+                const body = document.getElementById("eventsBody");
+                if (body) body.innerHTML = data.rows_html;
+
+                const lu = document.getElementById("lastUpdated");
+                if (lu) lu.textContent = new Date().toLocaleTimeString();
+
+                lastEventTs = Date.now();
+            }}
+        }} catch (e) {{
+            // ignore
+        }} finally {{
+            setTimeout(refreshEvents, delayMs);
+        }}
     }}
+
+    function updateLivePill() {{
+        const pill = document.getElementById("livePill");
+        if (!pill) return;
+        if (lastEventTs && (Date.now() - lastEventTs) < LIVE_WINDOW_MS) {{
+            pill.style.display = "inline-block";
+        }} else {{
+            pill.style.display = "none";
+        }}
     }}
 
-    // Initial refresh + repeat
+    setInterval(updateLivePill, 300);
     refreshEvents();
-    setInterval(refreshEvents, 3000);
     </script>
 
     </body></html>"""
