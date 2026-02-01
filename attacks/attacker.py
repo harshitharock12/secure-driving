@@ -87,46 +87,53 @@ def attack_missing_signature():
 
 
 if __name__ == "__main__":
-    print("=== SecureSense Attack Simulator ===")
-    print("1) Spoofing Attack")
-    print("2) Missing Signature Attack")
-    print("3) Tampering Attack (needs a valid signed event — run after system is live)")
-    print("4) Replay Attack (needs a valid signed event — waits 12s automatically)")
-    print("5) Run all attacks in sequence")
 
-    choice = input("Select attack: ").strip()
+    while True:
+        print("=== SecureSense Attack Simulator ===")
+        print("1) Spoofing Attack")
+        print("2) Missing Signature Attack")
+        print("3) Tampering Attack (needs a valid signed event — run after system is live)")
+        print("4) Replay Attack (needs a valid signed event — waits 12s automatically)")
+        print("5) Run all attacks in sequence")
+        print("6) Quit")
 
-    if choice == "1":
-        attack_spoof()
+        choice = input("Select attack: ").strip()
 
-    elif choice == "2":
-        attack_missing_signature()
+        if choice == "1":
+            attack_spoof()
 
-    elif choice in ("3", "4", "5"):
-        # Paste a real signed event here (from Person 2 output)
-        sample_valid = {
-            "sensor_id": "pi_sensor_01",
-            "event_type": "distance_alert",
-            "payload": {
-                "distance_cm": 15,
-                "motion": True
-            },
-            "timestamp": time.time(),
-            "sequence_num": 1,
-            "signature": "PASTE_VALID_SIGNATURE_HERE"
-        }
+        elif choice == "2":
+            attack_missing_signature()
 
-        if choice == "3":
-            attack_tamper(sample_valid)
+        elif choice in ("3", "4", "5"):
+            # Paste a real signed event here (from Person 2 output)
+            sample_valid = {
+                "sensor_id": "pi_sensor_01",
+                "event_type": "distance_alert",
+                "payload": {
+                    "distance_cm": 15,
+                    "motion": True
+                },
+                "timestamp": time.time(),
+                "sequence_num": 1,
+                "signature": "PASTE_VALID_SIGNATURE_HERE"
+            }
 
-        elif choice == "4":
-            attack_replay(sample_valid)
+            if choice == "3":
+                attack_tamper(sample_valid)
+
+            elif choice == "4":
+                attack_replay(sample_valid)
+
+            else:
+                attack_spoof()
+                attack_missing_signature()
+                attack_tamper(sample_valid)
+                attack_replay(sample_valid)
+        
+        elif choice == "6":
+            print("Exiting.")
+            break
 
         else:
-            attack_spoof()
-            attack_missing_signature()
-            attack_tamper(sample_valid)
-            attack_replay(sample_valid)
-
-    else:
-        print("Invalid choice.")
+            print("Invalid choice.")
