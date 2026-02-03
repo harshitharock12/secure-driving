@@ -34,7 +34,7 @@ DriveSecure implements cryptographic authentication for vehicle sensor data usin
 
 ## Architecture
 
-![DriveSecure Architecture](images/Raspberry Pi (HC-SR04 + Camera) → Signer Server (HMAC-SHA256) → LoggerVerifier → Dashboard.pdf)
+![DriveSecure Architecture](images/Architecture.pdf)
 
 
 
