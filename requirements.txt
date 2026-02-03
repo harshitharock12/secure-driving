@@ -1,4 +1,4 @@
-# SecureSense — Authenticated Vehicle Sensor System
+# Drive Secure — Authenticated Vehicle Sensor System
 # Hackathon Project Dependencies
 
 # Web Framework & API
