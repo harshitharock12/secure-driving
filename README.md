@@ -34,7 +34,7 @@ DriveSecure implements cryptographic authentication for vehicle sensor data usin
 
 ## Architecture
 
-![DriveSecure Architecture](images/Architecture.pdf)
+![DriveSecure Architecture](images/Architecture.png)
 
 
 
