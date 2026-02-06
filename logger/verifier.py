@@ -8,7 +8,7 @@ seen_sequences = {}   # { sensor_id: highest_seq_num }
 
 
 def recompute_hmac(message: dict) -> str:
-    """Recompute HMAC the same way Person 2 does."""
+    """Recompute HMAC the same way the signer does."""
     canonical = {k: v for k, v in message.items() if k != "signature"}
     canonical_str = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     mac = hmac.new(

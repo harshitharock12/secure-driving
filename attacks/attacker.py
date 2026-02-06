@@ -9,13 +9,14 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import SENSOR_HOST, LOGGER_PORT
+from signer import sign_message
 
 LOGGER_URL = f"http://{SENSOR_HOST}:{LOGGER_PORT}/receive"
 
 
 def attack_spoof():
     """
-    ATTACK 1: Spoofing — send a completely fake message with a made-up signature.
+    ATTACK 1: Spoofing - send a completely fake message with a made-up signature.
     The logger should reject this because the HMAC will not match.
     """
     print("[Attacker] Launching SPOOFING attack...")
@@ -38,7 +39,7 @@ def attack_spoof():
 
 def attack_tamper(original_signed_event: dict):
     """
-    ATTACK 2: Tampering — modify a field in a validly-signed message.
+    ATTACK 2: Tampering - modify a field in a validly-signed message.
     The old signature no longer matches the new content.
     """
     print("[Attacker] Launching TAMPERING attack...")
@@ -54,7 +55,7 @@ def attack_tamper(original_signed_event: dict):
 
 def attack_replay(original_signed_event: dict):
     """
-    ATTACK 3: Replay — re-send a previously valid message after a delay.
+    ATTACK 3: Replay - re-send a previously valid message after a delay.
     The timestamp will be too old and the sequence number already seen.
     """
     print("[Attacker] Launching REPLAY attack (waiting 12s for timestamp to expire)...")
@@ -66,7 +67,7 @@ def attack_replay(original_signed_event: dict):
 
 def attack_missing_signature():
     """
-    ATTACK 4: Missing Signature — send a valid-looking message with no signature at all.
+    ATTACK 4: Missing Signature - send a valid-looking message with no signature at all.
     """
     print("[Attacker] Launching MISSING SIGNATURE attack...")
 
@@ -86,14 +87,29 @@ def attack_missing_signature():
     print(f"[Attacker] Response: {resp.json()}")
 
 
+def generate_valid_event():
+    """Generate a legitimately signed event for tampering/replay attacks."""
+    event = {
+        "sensor_id": "pi_sensor_01",
+        "event_type": "distance_alert",
+        "payload": {
+            "distance_cm": 15,
+            "motion": True
+        },
+        "timestamp": time.time(),
+        "sequence_num": 1,
+    }
+    return sign_message(event)
+
+
 if __name__ == "__main__":
 
     while True:
         print("=== SecureSense Attack Simulator ===")
         print("1) Spoofing Attack")
         print("2) Missing Signature Attack")
-        print("3) Tampering Attack (needs a valid signed event — run after system is live)")
-        print("4) Replay Attack (needs a valid signed event — waits 12s automatically)")
+        print("3) Tampering Attack")
+        print("4) Replay Attack")
         print("5) Run all attacks in sequence")
         print("6) Quit")
 
@@ -106,18 +122,9 @@ if __name__ == "__main__":
             attack_missing_signature()
 
         elif choice in ("3", "4", "5"):
-            # Paste a real signed event here (from Person 2 output)
-            sample_valid = {
-                "sensor_id": "pi_sensor_01",
-                "event_type": "distance_alert",
-                "payload": {
-                    "distance_cm": 15,
-                    "motion": True
-                },
-                "timestamp": time.time(),
-                "sequence_num": 1,
-                "signature": "PASTE_VALID_SIGNATURE_HERE"
-            }
+            # Generate a valid signed event
+            sample_valid = generate_valid_event()
+            print(f"[Attacker] Generated valid event with signature: {sample_valid['signature'][:16]}...")
 
             if choice == "3":
                 attack_tamper(sample_valid)
@@ -128,8 +135,8 @@ if __name__ == "__main__":
             else:
                 attack_spoof()
                 attack_missing_signature()
-                attack_tamper(sample_valid)
-                attack_replay(sample_valid)
+                attack_tamper(generate_valid_event())
+                attack_replay(generate_valid_event())
         
         elif choice == "6":
             print("Exiting.")
@@ -137,3 +144,9 @@ if __name__ == "__main__":
 
         else:
             print("Invalid choice.")
+
+
+
+
+
+

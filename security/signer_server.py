@@ -31,7 +31,6 @@ def sign_endpoint():
         resp = requests.post(LOGGER_URL, json=signed, timeout=2)
         forwarded_status = resp.status_code
     except Exception as e:
-        # Logger might not be running yet during development — that's okay
         print(f"[Signer] Logger unreachable: {e}")
 
     return jsonify({"status": "ok", "forwarded": forwarded_status}), 200

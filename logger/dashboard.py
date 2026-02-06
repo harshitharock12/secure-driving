@@ -25,7 +25,7 @@ clear_events()
 
 @app.route("/receive", methods=["POST"])
 def receive():
-    """Endpoint that Person 2 POSTs signed messages to."""
+    """Endpoint that signer server POSTs signed messages to."""
     event = request.get_json()
     if not event:
         return jsonify({"error": "No JSON"}), 400
@@ -86,7 +86,6 @@ def events():
 
     rows_html = "".join(rows)
 
-    # Optional: helps the "update only when changed" approach
     last_id = events[0].get("id", 0) if events else 0
 
     return jsonify({
